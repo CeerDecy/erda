@@ -17,6 +17,7 @@ package endpoints
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"reflect"
@@ -28,6 +29,7 @@ import (
 	"github.com/erda-project/erda/pkg/mock"
 
 	"github.com/erda-project/erda-infra/providers/legacy/httpendpoints/i18n"
+
 	"github.com/erda-project/erda/apistructs"
 	"github.com/erda-project/erda/internal/core/legacy/dao"
 	"github.com/erda-project/erda/internal/core/legacy/services/apierrors"
@@ -168,6 +170,11 @@ func (e *Endpoints) UpdateProject(ctx context.Context, r *http.Request, vars map
 		}
 	}
 
+	// 校验集群资源
+	if err = e.calibrationClusterResource(projectUpdateReq, orgID); err != nil {
+		return apierrors.ErrUpdateProject.InternalError(err).ToResp(), nil
+	}
+
 	// 更新项目信息至DB
 	if err = e.project.UpdateWithEvent(ctx, orgID, projectID, userID.String(), &projectUpdateReq); err != nil {
 		return apierrors.ErrUpdateProject.InternalError(err).ToResp(), nil
@@ -179,6 +186,49 @@ func (e *Endpoints) UpdateProject(ctx context.Context, r *http.Request, vars map
 	}
 
 	return httpserver.OkResp(projectID)
+}
+
+// 验证集群资源是否被清理干净
+func (e *Endpoints) calibrationClusterResource(body apistructs.ProjectUpdateBody, orgId int64) error {
+	resStruct := reflect.TypeOf(*body.ResourceConfigs)
+	resValue := reflect.ValueOf(*body.ResourceConfigs)
+	fieldNum := resStruct.NumField()
+	hasClear := make(map[string]struct{})
+	for i := 0; i < fieldNum; i++ {
+		field := resStruct.Field(i)
+		resourceConfig, ok := resValue.Field(i).Interface().(*apistructs.ResourceConfig)
+		if !ok {
+			return errors.New("can't convert to *apistructs.ResourceConfig")
+		}
+		newCluster := resourceConfig.ClusterName
+		oldCluster := body.ClusterConfig[field.Name]
+		// 通过比较ClusterConfig和ResourceConfigs中的内容，找到被切换的集群; 通过hasClear判断该集群是否已经被验证过,对于已经验证过的集群跳过验证步骤
+		if _, ok = hasClear[oldCluster]; !ok && newCluster != oldCluster {
+			strOrgId := strconv.Itoa(int(orgId))
+			var referenceResp *apistructs.ResourceReferenceData
+			var rReferred bool
+			// 查找集群资源
+			referenceResp, err := e.bdl.FindClusterResource(oldCluster, strOrgId)
+			if err != nil {
+				detail := fmt.Sprintf("check runtime cluster refer info failed, orgid: %s, cluster_name: %s", strOrgId, newCluster)
+				err = errors.New(detail)
+				logrus.Error(err)
+				return err
+			}
+
+			if referenceResp.AddonReference > 0 || referenceResp.ServiceReference > 0 {
+				rReferred = true
+			}
+
+			if rReferred {
+				return errors.New("There are Runtimes (Addons) in the cluster, cannot offline this cluster if force offline is not set.")
+			}
+
+			// 集群清理检查完成，将该cluster标记为已检查
+			hasClear[oldCluster] = struct{}{}
+		}
+	}
+	return nil
 }
 
 func (e *Endpoints) updateProjectLabels(projectID uint64, newLabels []string) error {
