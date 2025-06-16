@@ -62,6 +62,7 @@ func (c *DBClient) CreateOrUpdate(ctx context.Context, req *pb.MCPServerRegister
 				Instruction:      req.Instruction,
 				Version:          req.Version,
 				Endpoint:         req.Endpoint,
+				TransportType:    req.TransportType,
 				Config:           string(rawConfig),
 				ServerConfig:     req.ServerConfig,
 				IsPublished:      req.IsPublished != nil && req.IsPublished.Value,
@@ -86,6 +87,7 @@ func (c *DBClient) CreateOrUpdate(ctx context.Context, req *pb.MCPServerRegister
 
 		// update server
 		dbServer.Endpoint = req.Endpoint
+		dbServer.TransportType = req.TransportType
 		dbServer.Description = req.Description
 		dbServer.Instruction = req.Instruction
 		dbServer.Config = string(rawConfig)
