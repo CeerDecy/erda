@@ -17,6 +17,7 @@ package auth
 import (
 	"encoding/base64"
 	"fmt"
+	"github.com/erda-project/erda/internal/core/openapi/settings"
 	"net/http"
 	"strconv"
 	"strings"
@@ -58,9 +59,10 @@ type Auth struct {
 	RedisCli     *redis.Client
 	OAuth2Server *oauth2.OAuth2Server
 	TokenService tokenpb.TokenServiceServer
+	settings     settings.OpenapiSettings
 }
 
-func NewAuth(oauth2server *oauth2.OAuth2Server, token tokenpb.TokenServiceServer) (*Auth, error) {
+func NewAuth(oauth2server *oauth2.OAuth2Server, token tokenpb.TokenServiceServer, settings settings.OpenapiSettings) (*Auth, error) {
 	sentinelAddrs := strings.Split(conf.RedisSentinelAddrs(), ",")
 	RedisCli := redis.NewFailoverClient(&redis.FailoverOptions{
 		MasterName:    conf.RedisMasterName(),
@@ -70,7 +72,7 @@ func NewAuth(oauth2server *oauth2.OAuth2Server, token tokenpb.TokenServiceServer
 	if _, err := RedisCli.Ping().Result(); err != nil {
 		return nil, err
 	}
-	return &Auth{RedisCli: RedisCli, OAuth2Server: oauth2server, TokenService: token}, nil
+	return &Auth{RedisCli: RedisCli, OAuth2Server: oauth2server, TokenService: token, settings: settings}, nil
 }
 
 func (a *Auth) Auth(spec *spec.Spec, req *http.Request) AuthResult {
@@ -94,7 +96,7 @@ func (a *Auth) Auth(spec *spec.Spec, req *http.Request) AuthResult {
 	case NONE:
 		break
 	case LOGIN:
-		user := NewUser(a.RedisCli)
+		user := NewUser(a.RedisCli, a.settings.GetSessionExpire())
 		if r = a.checkLogin(req, user, spec); r.Code != AuthSucc {
 			return r
 		}
@@ -102,7 +104,7 @@ func (a *Auth) Auth(spec *spec.Spec, req *http.Request) AuthResult {
 			return r
 		}
 	case TRY_LOGIN:
-		user := NewUser(a.RedisCli)
+		user := NewUser(a.RedisCli, a.settings.GetSessionExpire())
 		if r := a.checkLogin(req, user, spec); r.Code != AuthSucc {
 			break
 		}
@@ -110,7 +112,7 @@ func (a *Auth) Auth(spec *spec.Spec, req *http.Request) AuthResult {
 			break
 		}
 	case BASICAUTH:
-		user := NewUser(a.RedisCli)
+		user := NewUser(a.RedisCli, a.settings.GetSessionExpire())
 		if r = a.checkBasicAuth(req, user); r.Code != AuthSucc {
 			return r
 		}

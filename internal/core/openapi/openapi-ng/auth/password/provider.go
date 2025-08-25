@@ -17,6 +17,7 @@ package password
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/erda-project/erda/internal/core/openapi/settings"
 	"net/http"
 	"strings"
 
@@ -38,11 +39,12 @@ type config struct {
 
 // +provider
 type provider struct {
-	Cfg    *config
-	Log    logs.Logger
-	Router openapi.Interface `autowired:"openapi-router"`
-	Redis  *redis.Client     `autowired:"redis-client"`
-	Org    org.Interface
+	Cfg      *config
+	Log      logs.Logger
+	Router   openapi.Interface `autowired:"openapi-router"`
+	Redis    *redis.Client     `autowired:"redis-client"`
+	Org      org.Interface
+	Settings settings.OpenapiSettings `autowired:"openapi-settings"`
 }
 
 func (p *provider) Init(ctx servicehub.Context) (err error) {
@@ -73,7 +75,7 @@ func (p *provider) Login(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user := auth.NewUser(p.Redis)
+	user := auth.NewUser(p.Redis, p.Settings.GetSessionExpire())
 	sessionID, err := user.PwdLogin(params.Username, params.Password)
 	if err != nil {
 		err := fmt.Errorf("failed to PwdLogin: %v", err)

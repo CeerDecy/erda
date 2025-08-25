@@ -16,6 +16,7 @@ package ucoauth
 
 import (
 	"fmt"
+	"github.com/erda-project/erda/internal/core/openapi/settings"
 	"net/http"
 	"strings"
 	"time"
@@ -54,6 +55,7 @@ type provider struct {
 	Org    org.Interface
 
 	referMatcher *referMatcher
+	Settings     settings.OpenapiSettings `autowired:"openapi-settings"`
 }
 
 func (p *provider) Init(ctx servicehub.Context) (err error) {

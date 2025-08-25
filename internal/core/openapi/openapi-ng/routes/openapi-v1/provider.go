@@ -15,6 +15,7 @@
 package openapiv1
 
 import (
+	"github.com/erda-project/erda/internal/core/openapi/settings"
 	"net/http"
 	"strings"
 
@@ -49,6 +50,7 @@ type provider struct {
 	TokenService tokenpb.TokenServiceServer `autowired:"erda.core.token.TokenService"`
 	Identity     userpb.UserServiceServer
 	Org          org.Interface
+	Settings     settings.OpenapiSettings `autowired:"openapi-settings"`
 }
 
 func (p *provider) Init(ctx servicehub.Context) (err error) {
@@ -56,7 +58,7 @@ func (p *provider) Init(ctx servicehub.Context) (err error) {
 	p.proxy.Discover = p.Discover
 	hooks.Enable = true
 	conf.Load()
-	srv, err := openapiv1.NewServer(p.TokenService)
+	srv, err := openapiv1.NewServer(p.TokenService, p.Settings)
 	if err != nil {
 		return err
 	}

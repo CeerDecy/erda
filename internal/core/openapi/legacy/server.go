@@ -16,6 +16,7 @@ package legacy
 
 import (
 	"fmt"
+	"github.com/erda-project/erda/internal/core/openapi/settings"
 	"net/http"
 	"strings"
 	"time"
@@ -24,8 +25,8 @@ import (
 	"github.com/erda-project/erda/internal/core/openapi/legacy/conf"
 )
 
-func NewServer(token tokenpb.TokenServiceServer) (*http.Server, error) {
-	s, err := NewLoginServer(token)
+func NewServer(token tokenpb.TokenServiceServer, settings settings.OpenapiSettings) (*http.Server, error) {
+	s, err := NewLoginServer(token, settings)
 	if err != nil {
 		return nil, err
 	}

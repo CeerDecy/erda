@@ -69,26 +69,27 @@ type ScopeInfo struct {
 }
 
 type User struct {
-	sessionID  string
-	token      uc.OAuthToken
-	info       identity.UserInfo
-	scopeInfo  ScopeInfo
-	state      GetUserState
-	redisCli   *redis.Client
-	ucUserAuth *uc.UCUserAuth
+	sessionID     string
+	token         uc.OAuthToken
+	info          identity.UserInfo
+	scopeInfo     ScopeInfo
+	state         GetUserState
+	redisCli      *redis.Client
+	ucUserAuth    *uc.UCUserAuth
+	sessionExpire time.Duration
 
 	bundle *bundle.Bundle
 }
 
 var client = bundle.New(bundle.WithErdaServer(), bundle.WithDOP())
 
-func NewUser(redisCli *redis.Client) *User {
+func NewUser(redisCli *redis.Client, expire time.Duration) *User {
 	ucUserAuth := uc.NewUCUserAuth(conf.UCAddrFront(), discover.UC(), "http://"+conf.UCRedirectHost()+"/logincb", conf.UCClientID(), conf.UCClientSecret())
 	if conf.OryEnabled() {
 		ucUserAuth.ClientID = conf.OryCompatibleClientID()
 		ucUserAuth.UCHost = conf.OryKratosAddr()
 	}
-	return &User{state: GetInit, redisCli: redisCli, ucUserAuth: ucUserAuth, bundle: client}
+	return &User{state: GetInit, redisCli: redisCli, ucUserAuth: ucUserAuth, bundle: client, sessionExpire: expire}
 }
 
 func (u *User) get(req *http.Request, state GetUserState) (interface{}, AuthResult) {
@@ -274,7 +275,7 @@ func (u *User) PwdLogin(username, password string) (string, error) {
 
 func (u *User) storeSession(token string) error {
 	u.sessionID = genSessionID()
-	_, err := u.redisCli.Set(MkSessionKey(u.sessionID), token, SessionExpireDays*24*time.Hour).Result()
+	_, err := u.redisCli.Set(MkSessionKey(u.sessionID), token, u.sessionExpire).Result()
 	if err != nil {
 		err_ := errors.Wrap(err, "storeSession: store redis fail")
 		return err_
